@@ -1,6 +1,11 @@
+
+
 import re
 import os
 import shutil
+import sys
+
+print(sys.argv)
 
 sqlFile = "schema.sql"
 folder = "./tables"
@@ -43,52 +48,54 @@ except OSError as error:
 finally:
     os.mkdir(folder)
 
-path = folder
+for cmdType in types:
+    path = os.path.join(folder, str(cmdType).replace(' ', ''))
+    os.makedirs(path)
 
-for t in tables:
-    try:
-        int(t[-1])
-        continue
-    except:
-        pass
+    for t in tables:
+        added = 0
+        f = open(os.path.join(path, t+".sql"), "x")
 
-    added = 0
-    f = open(os.path.join(path, t+".sql"), "x")
+        correct = r'public\.'+t+r'(_.*seq|_.*idx|_.*key|_type)?;?\s'
 
-    correct = r'public\.'+t+r'(_.*seq|_.*idx|_.*key|_type)?;?\s'
+        limit = len(blocks)
+        iterator = 0
 
-    limit = len(blocks)
-    iterator = 0
+        while iterator < limit:
+            if blocks[iterator][2] != cmdType:
+                iterator = iterator+1
+                continue
 
-    while iterator < limit:
-        if blocks[iterator][2] not in ['TABLE', 'INDEX','CONSTRAINT','DEFAULT','SEQUENCE OWNED BY']:
-            iterator = iterator+1
-            continue
+            m = re.search(correct, blocks[iterator][3], re.M)
+            if m is not None:
+                write = False
+                endIsNum = True
 
-        m = re.search(correct, blocks[iterator][3], re.M)
-        if m is not None:
-            write = False
-            endIsNum = True
+                try:
+                    int(blocks[iterator][1][-1])
+                except:
+                    endIsNum = False
 
-            try:
-                int(blocks[iterator][1][-1])
-            except:
-                endIsNum = False
+                if endIsNum:
+                    if t in blocks[iterator][1].split(" "):
+                        write = True
 
-            if endIsNum:
-                if t in blocks[iterator][1].split(" "):
+                else:
                     write = True
-            else:
-                write = True
 
-            if write:
-                f.write(blocks[iterator][0])
-                del blocks[iterator]
-                limit = limit-1
-                iterator = iterator-1
-        iterator = iterator+1
+                if write:
+                    f.write(blocks[iterator][0])
+                    added = added+1
+                    del blocks[iterator]
+                    limit = limit-1
+                    iterator = iterator-1
+            iterator = iterator+1
 
-    f.close()
+        f.close()
+        if added == 0:
+            os.remove(os.path.join(path, t+".sql"))
+    if len(os.listdir(path)) == 0:
+        os.rmdir(path)
 
 
 print("unused blocks:", len(blocks))
